@@ -26,7 +26,7 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error(transparent)]
     KeyStore(#[from] crate::keystore::Error),
-    #[error("no profile found at the filepath \"{0}\"")]
+    #[error("no profile found at the filepath '{0}'")]
     NotFound(PathBuf),
 }
 
