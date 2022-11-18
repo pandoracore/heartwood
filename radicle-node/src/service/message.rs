@@ -1,3 +1,5 @@
+use cyphernet::addr::{PeerAddr, UniversalAddr};
+use cyphernet::crypto::ed25519::Curve25519;
 use std::str::FromStr;
 use std::{fmt, io, mem, net};
 
@@ -22,36 +24,50 @@ impl fmt::Display for Hostname {
 }
 
 /// Peer public protocol address.
-#[derive(Debug, Clone, PartialEq, Eq)]
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Display, From)]
+#[display(inner)]
 pub enum Address {
-    Ipv4 {
-        ip: net::Ipv4Addr,
-        port: u16,
-    },
-    Ipv6 {
-        ip: net::Ipv6Addr,
-        port: u16,
-    },
-    Hostname {
-        host: Hostname,
-        port: u16,
-    },
-    /// Tor V3 onion address.
-    Onion {
-        key: crypto::PublicKey,
-        port: u16,
-        checksum: u16,
-        version: u8,
-    },
+    #[from]
+    #[from(net::SocketAddr)]
+    Host(UniversalAddr),
+
+    #[from]
+    Node(PeerAddr<Curve25519, UniversalAddr>),
 }
 
-impl From<net::SocketAddr> for Address {
-    fn from(other: net::SocketAddr) -> Self {
-        let port = other.port();
+impl Address {
+    pub fn to_socket_addr(&self) -> net::SocketAddr {
+        match self {
+            Address::Host(host) => host.to_socket_addr(),
+            Address::Node(node) => node.to_socket_addr(),
+        }
+    }
+}
 
-        match other.ip() {
-            net::IpAddr::V4(ip) => Self::Ipv4 { ip, port },
-            net::IpAddr::V6(ip) => Self::Ipv6 { ip, port },
+impl cyphernet::addr::Addr for Address {
+    fn port(&self) -> u16 {
+        match self {
+            Address::Host(host) => host.port(),
+            Address::Node(node) => node.port(),
+        }
+    }
+}
+
+impl From<Address> for UniversalAddr {
+    fn from(addr: Address) -> Self {
+        match addr {
+            Address::Host(host) => host,
+            Address::Node(node) => *node.addr(),
+        }
+    }
+}
+
+impl From<&Address> for UniversalAddr {
+    fn from(addr: &Address) -> Self {
+        match addr {
+            Address::Host(host) => *host,
+            Address::Node(node) => *node.addr(),
         }
     }
 }
@@ -66,38 +82,12 @@ impl FromStr for Address {
     type Err = AddressParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(addr) = net::SocketAddr::from_str(s) {
-            match addr.ip() {
-                net::IpAddr::V4(ip) => Ok(Self::Ipv4 {
-                    ip,
-                    port: addr.port(),
-                }),
-                net::IpAddr::V6(ip) => Ok(Self::Ipv6 {
-                    ip,
-                    port: addr.port(),
-                }),
-            }
+        if let Ok(addr) = PeerAddr::from_str(s) {
+            Ok(Address::Node(addr))
+        } else if let Ok(addr) = UniversalAddr::from_str(s) {
+            Ok(Address::Host(addr))
         } else {
             Err(Self::Err::Unsupported(s.to_owned()))
-        }
-    }
-}
-
-impl fmt::Display for Address {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ipv4 { ip, port } => {
-                write!(f, "{}:{}", ip, port)
-            }
-            Self::Ipv6 { ip, port } => {
-                write!(f, "{}:{}", ip, port)
-            }
-            Self::Hostname { host, port } => {
-                write!(f, "{}:{}", host, port)
-            }
-            Self::Onion { key, port, .. } => {
-                write!(f, "{}:{}", key, port)
-            }
         }
     }
 }

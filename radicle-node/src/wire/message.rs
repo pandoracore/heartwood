@@ -1,6 +1,7 @@
 use std::{io, mem, net};
 
 use byteorder::{NetworkEndian, ReadBytesExt};
+use cyphernet::addr::UniversalAddr;
 
 use crate::prelude::*;
 use crate::service::message::*;
@@ -70,7 +71,7 @@ pub enum AddressType {
     Ipv4 = 1,
     Ipv6 = 2,
     Hostname = 3,
-    Onion = 4,
+    Socks5 = 4,
 }
 
 impl From<AddressType> for u8 {
@@ -81,11 +82,13 @@ impl From<AddressType> for u8 {
 
 impl From<&Address> for AddressType {
     fn from(a: &Address) -> Self {
-        match a {
-            Address::Ipv4 { .. } => AddressType::Ipv4,
-            Address::Ipv6 { .. } => AddressType::Ipv6,
-            Address::Hostname { .. } => AddressType::Hostname,
-            Address::Onion { .. } => AddressType::Onion,
+        if matches!(a.into(), UniversalAddr::Proxied(_)) {
+            return AddressType::Socks5;
+        }
+        if a.to_socket_addr().is_ipv4() {
+            return AddressType::Ipv4;
+        } else {
+            return AddressType::Ipv6;
         }
     }
 }
@@ -98,7 +101,7 @@ impl TryFrom<u8> for AddressType {
             1 => Ok(AddressType::Ipv4),
             2 => Ok(AddressType::Ipv6),
             3 => Ok(AddressType::Hostname),
-            4 => Ok(AddressType::Onion),
+            4 => Ok(AddressType::Socks5),
             _ => Err(other),
         }
     }
@@ -285,6 +288,8 @@ impl wire::Decode for Message {
 
 impl wire::Encode for Address {
     fn encode<W: std::io::Write + ?Sized>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        todo!()
+        /*
         let mut n = 0;
 
         match self {
@@ -298,15 +303,16 @@ impl wire::Encode for Address {
                 n += ip.octets().encode(writer)?;
                 n += port.encode(writer)?;
             }
-            Self::Hostname { .. } => todo!(),
-            Self::Onion { .. } => todo!(),
         }
         Ok(n)
+         */
     }
 }
 
 impl wire::Decode for Address {
     fn decode<R: std::io::Read + ?Sized>(reader: &mut R) -> Result<Self, wire::Error> {
+        todo!()
+        /*
         let addrtype = reader.read_u8()?;
 
         match AddressType::try_from(addrtype) {
@@ -327,11 +333,12 @@ impl wire::Decode for Address {
             Ok(AddressType::Hostname) => {
                 todo!();
             }
-            Ok(AddressType::Onion) => {
+            Ok(AddressType::Socks5) => {
                 todo!();
             }
             Err(other) => Err(wire::Error::UnknownAddressType(other)),
         }
+         */
     }
 }
 

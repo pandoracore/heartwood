@@ -178,8 +178,8 @@ fn test_persistent_peer_connect() {
     alice.initialize();
 
     let mut outbox = alice.outbox();
-    assert_matches!(outbox.next(), Some(Io::Connect(a)) if a == bob.addr());
-    assert_matches!(outbox.next(), Some(Io::Connect(a)) if a == eve.addr());
+    assert_matches!(outbox.next(), Some(Io::Connect(a)) if a.to_socket_addr() == bob.addr());
+    assert_matches!(outbox.next(), Some(Io::Connect(a)) if a.to_socket_addr() == eve.addr());
     assert_matches!(outbox.next(), None);
 }
 
@@ -647,7 +647,7 @@ fn test_persistent_peer_reconnect() {
             &bob.addr(),
             &nakamoto::DisconnectReason::ConnectionError(error.clone()),
         );
-        assert_matches!(alice.outbox().next(), Some(Io::Connect(a)) if a == bob.addr());
+        assert_matches!(alice.outbox().next(), Some(Io::Connect(a)) if a.to_socket_addr() == bob.addr());
         assert_matches!(alice.outbox().next(), None);
 
         alice.attempted(&bob.addr());
@@ -703,8 +703,8 @@ fn test_maintain_connections() {
                 _ => None,
             })
             .expect("Alice connects to a new peer");
-        assert!(addr != peer.addr());
-        unconnected.retain(|p| p.addr() != addr);
+        assert_ne!(addr.to_socket_addr(), peer.addr());
+        unconnected.retain(|p| p.addr() != addr.to_socket_addr());
     }
     assert!(
         unconnected.is_empty(),

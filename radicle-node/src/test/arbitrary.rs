@@ -1,6 +1,7 @@
 use std::net;
 
 use bloomy::BloomFilter;
+use cyphernet::addr::UniversalAddr;
 use quickcheck::Arbitrary;
 
 use crate::crypto;
@@ -102,19 +103,15 @@ impl Arbitrary for Message {
 
 impl Arbitrary for Address {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
-        if bool::arbitrary(g) {
-            Address::Ipv4 {
-                ip: net::Ipv4Addr::from(u32::arbitrary(g)),
-                port: u16::arbitrary(g),
-            }
+        UniversalAddr::Direct(if bool::arbitrary(g) {
+            let ip = net::Ipv4Addr::from(u32::arbitrary(g));
+            net::SocketAddr::from((ip, u16::arbitrary(g)))
         } else {
             let octets: [u8; 16] = ByteArray::<16>::arbitrary(g).into_inner();
-
-            Address::Ipv6 {
-                ip: net::Ipv6Addr::from(octets),
-                port: u16::arbitrary(g),
-            }
-        }
+            let ip = net::Ipv6Addr::from(octets);
+            net::SocketAddr::from((ip, u16::arbitrary(g))).into()
+        })
+        .into()
     }
 }
 

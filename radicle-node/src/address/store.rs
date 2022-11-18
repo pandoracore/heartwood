@@ -275,7 +275,7 @@ impl sql::ValueInto for AddressType {
                 "ipv4" => Some(AddressType::Ipv4),
                 "ipv6" => Some(AddressType::Ipv6),
                 "hostname" => Some(AddressType::Hostname),
-                "onion" => Some(AddressType::Onion),
+                "onion" => Some(AddressType::Socks5),
                 _ => None,
             },
             _ => None,
@@ -289,7 +289,7 @@ impl sql::Bindable for AddressType {
             Self::Ipv4 => "ipv4".bind(stmt, i),
             Self::Ipv6 => "ipv6".bind(stmt, i),
             Self::Hostname => "hostname".bind(stmt, i),
-            Self::Onion => "onion".bind(stmt, i),
+            Self::Socks5 => "onion".bind(stmt, i),
         }
     }
 }
