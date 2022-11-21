@@ -9,6 +9,7 @@ edition = "2021"
 test = ["radicle/test", "radicle-crypto/test", "quickcheck"]
 
 [dependencies]
+amplify = "3.13.0"
 anyhow = { version = "1" }
 bloomy = { version = "1.2" }
 byteorder = { version = "1" }
@@ -21,6 +22,7 @@ lexopt = { version = "0.2.1" }
 log = { version = "0.4.17", features = ["std"] }
 nakamoto-net = { version = "0.3.0" }
 nakamoto-net-poll = { version = "0.3.0" }
+cyphernet = { git = "https://github.com/Internet2-WG/rust-cyphernet", features = ["ed25519"] }
 nonempty = { version = "0.8.0", features = ["serialize"] }
 quickcheck = { version = "1", default-features = false, optional = true }
 sqlite = { version = "0.28.1" }
