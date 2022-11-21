@@ -9,10 +9,11 @@ use thiserror::Error;
 use crate::address::types;
 use crate::address::{KnownAddress, Source};
 use crate::clock::Timestamp;
-use crate::prelude::Address;
+use crate::prelude::ConnectAddr;
 use crate::service::NodeId;
 use crate::sql::transaction;
 use crate::wire::message::AddressType;
+use crate::PeerAddr;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -78,7 +79,7 @@ impl Store for Book {
             for row in stmt.into_cursor() {
                 let row = row?;
                 let _typ = row.get::<AddressType, _>("type");
-                let addr = row.get::<Address, _>("value");
+                let addr = row.get::<PeerAddr, _>("value");
                 let source = row.get::<Source, _>("source");
 
                 addrs.push(KnownAddress {
@@ -183,7 +184,7 @@ impl Store for Book {
         while let Some(Ok(row)) = stmt.next() {
             let node = row.get("node");
             let _typ = row.get::<AddressType, _>("type");
-            let addr = row.get::<Address, _>("value");
+            let addr = row.get::<PeerAddr, _>("value");
             let source = row.get::<Source, _>("source");
 
             entries.push((
@@ -229,16 +230,16 @@ pub trait Store {
     fn entries(&self) -> Result<Box<dyn Iterator<Item = (NodeId, KnownAddress)>>, Error>;
 }
 
-impl sql::ValueInto for Address {
+impl sql::ValueInto for ConnectAddr {
     fn into(value: &sql::Value) -> Option<Self> {
         match value {
-            sql::Value::String(s) => Address::from_str(s.as_str()).ok(),
+            sql::Value::String(s) => ConnectAddr::from_str(s.as_str()).ok(),
             _ => None,
         }
     }
 }
 
-impl sql::Bindable for Address {
+impl sql::Bindable for ConnectAddr {
     fn bind(self, stmt: &mut sql::Statement<'_>, i: usize) -> sql::Result<()> {
         self.to_string().bind(stmt, i)
     }

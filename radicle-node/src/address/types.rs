@@ -5,8 +5,7 @@ use radicle::node;
 
 use crate::clock::Timestamp;
 use crate::collections::HashMap;
-use crate::service::message::Address;
-use crate::LocalTime;
+use crate::{LocalTime, PeerAddr};
 
 /// A map with the ability to randomly select values.
 #[derive(Debug)]
@@ -91,7 +90,7 @@ pub struct Node {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnownAddress {
     /// Network address.
-    pub addr: Address,
+    pub addr: PeerAddr,
     /// Address of the peer who sent us this address.
     pub source: Source,
     /// Last time this address was used to successfully connect to a peer.
@@ -102,7 +101,7 @@ pub struct KnownAddress {
 
 impl KnownAddress {
     /// Create a new known address.
-    pub fn new(addr: Address, source: Source) -> Self {
+    pub fn new(addr: PeerAddr, source: Source) -> Self {
         Self {
             addr,
             source,

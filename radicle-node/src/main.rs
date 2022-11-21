@@ -4,17 +4,17 @@ use anyhow::Context as _;
 
 use radicle::profile;
 use radicle_node::crypto::ssh::keystore::MemorySigner;
-use radicle_node::logger;
-use radicle_node::prelude::Address;
+use radicle_node::prelude::ConnectAddr;
 use radicle_node::{client, control, service};
+use radicle_node::{logger, PeerAddr};
 
 type Reactor = nakamoto_net_poll::Reactor<net::TcpStream>;
 
 #[derive(Debug)]
 struct Options {
-    connect: Vec<Address>,
+    connect: Vec<PeerAddr>,
     listen: Vec<net::SocketAddr>,
-    external_addresses: Vec<Address>,
+    external_addresses: Vec<ConnectAddr>,
 }
 
 impl Options {

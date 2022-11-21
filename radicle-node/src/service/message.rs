@@ -1,5 +1,3 @@
-use cyphernet::addr::{PeerAddr, UniversalAddr};
-use cyphernet::crypto::ed25519::Curve25519;
 use std::str::FromStr;
 use std::{fmt, io, mem, net};
 
@@ -12,6 +10,7 @@ use crate::service::filter::Filter;
 use crate::service::{NodeId, Timestamp, PROTOCOL_VERSION};
 use crate::storage::refs::Refs;
 use crate::wire;
+use crate::PeerAddr;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 // TODO: We should check the length and charset when deserializing.
@@ -27,47 +26,28 @@ impl fmt::Display for Hostname {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Display, From)]
 #[display(inner)]
-pub enum Address {
+pub enum ConnectAddr {
     #[from]
-    #[from(net::SocketAddr)]
-    Host(UniversalAddr),
+    Host(net::SocketAddr),
 
     #[from]
-    Node(PeerAddr<Curve25519, UniversalAddr>),
+    Node(PeerAddr),
 }
 
-impl Address {
+impl ConnectAddr {
     pub fn to_socket_addr(&self) -> net::SocketAddr {
         match self {
-            Address::Host(host) => host.to_socket_addr(),
-            Address::Node(node) => node.to_socket_addr(),
+            ConnectAddr::Host(host) => *host,
+            ConnectAddr::Node(node) => node.to_socket_addr(),
         }
     }
 }
 
-impl cyphernet::addr::Addr for Address {
+impl cyphernet::addr::Addr for ConnectAddr {
     fn port(&self) -> u16 {
         match self {
-            Address::Host(host) => host.port(),
-            Address::Node(node) => node.port(),
-        }
-    }
-}
-
-impl From<Address> for UniversalAddr {
-    fn from(addr: Address) -> Self {
-        match addr {
-            Address::Host(host) => host,
-            Address::Node(node) => *node.addr(),
-        }
-    }
-}
-
-impl From<&Address> for UniversalAddr {
-    fn from(addr: &Address) -> Self {
-        match addr {
-            Address::Host(host) => *host,
-            Address::Node(node) => *node.addr(),
+            ConnectAddr::Host(host) => host.port(),
+            ConnectAddr::Node(node) => node.port(),
         }
     }
 }
@@ -78,14 +58,14 @@ pub enum AddressParseError {
     Unsupported(String),
 }
 
-impl FromStr for Address {
+impl FromStr for ConnectAddr {
     type Err = AddressParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(addr) = PeerAddr::from_str(s) {
-            Ok(Address::Node(addr))
-        } else if let Ok(addr) = UniversalAddr::from_str(s) {
-            Ok(Address::Host(addr))
+            Ok(ConnectAddr::Node(addr))
+        } else if let Ok(addr) = net::SocketAddr::from_str(s) {
+            Ok(ConnectAddr::Host(addr))
         } else {
             Err(Self::Err::Unsupported(s.to_owned()))
         }
@@ -122,7 +102,7 @@ pub struct NodeAnnouncement {
     /// Non-unique alias. Must be valid UTF-8.
     pub alias: [u8; 32],
     /// Announced addresses.
-    pub addresses: Vec<Address>,
+    pub addresses: Vec<PeerAddr>,
     /// Nonce used for announcement proof-of-work.
     pub nonce: u64,
 }
@@ -190,7 +170,7 @@ impl wire::Decode for NodeAnnouncement {
         let features = node::Features::decode(reader)?;
         let timestamp = Timestamp::decode(reader)?;
         let alias = wire::Decode::decode(reader)?;
-        let addresses = Vec::<Address>::decode(reader)?;
+        let addresses = Vec::<PeerAddr>::decode(reader)?;
         let nonce = u64::decode(reader)?;
 
         Ok(Self {
@@ -352,7 +332,7 @@ pub enum Message {
         // TODO: This is currently untrusted.
         id: NodeId,
         version: u32,
-        addrs: Vec<Address>,
+        addrs: Vec<ConnectAddr>,
     },
 
     /// Subscribe to gossip messages matching the filter and time range.
@@ -376,7 +356,7 @@ pub enum Message {
 }
 
 impl Message {
-    pub fn init(id: NodeId, addrs: Vec<Address>) -> Self {
+    pub fn init(id: NodeId, addrs: Vec<ConnectAddr>) -> Self {
         Self::Initialize {
             id,
             version: PROTOCOL_VERSION,

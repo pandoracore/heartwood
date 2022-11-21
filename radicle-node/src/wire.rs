@@ -20,7 +20,7 @@ use crate::git::fmt;
 use crate::hash::Digest;
 use crate::identity::Id;
 use crate::node;
-use crate::prelude::Address;
+use crate::prelude::ConnectAddr;
 use crate::service;
 use crate::service::reactor::Io;
 use crate::service::{filter, routing, session};
@@ -433,7 +433,7 @@ pub struct Inbox<T: Transcode> {
 
 #[derive(Debug)]
 pub struct Wire<R, S, W, G, H: Handshake> {
-    connecting: HashMap<net::SocketAddr, Address>,
+    connecting: HashMap<net::SocketAddr, ConnectAddr>,
     handshakes: HashMap<net::SocketAddr, H>,
     inner_queue: VecDeque<nakamoto::Io<service::Event, service::DisconnectReason>>,
     inboxes: HashMap<net::SocketAddr, Inbox<H::Transcoder>>,
@@ -458,7 +458,7 @@ where
     S: address::Store,
     W: WriteStorage + 'static,
     G: Signer,
-    H: Handshake<InitState = Address>,
+    H: Handshake<InitState = ConnectAddr>,
 {
     type Event = service::Event;
     type Command = service::Command;

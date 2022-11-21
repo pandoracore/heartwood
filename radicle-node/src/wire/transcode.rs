@@ -3,7 +3,7 @@ use std::convert::Infallible;
 use std::io;
 use std::io::Read;
 
-use crate::prelude::Address;
+use crate::prelude::ConnectAddr;
 use nakamoto_net::Link;
 
 // TODO: Implement Try trait once stabilized
@@ -48,11 +48,11 @@ pub trait Handshake: Sized {
 pub struct NoHandshake(Link);
 
 impl Handshake for NoHandshake {
-    type InitState = Address;
+    type InitState = ConnectAddr;
     type Transcoder = PlainTranscoder;
     type Error = Infallible;
 
-    fn init(_: Address) -> Self {
+    fn init(_: ConnectAddr) -> Self {
         NoHandshake(Link::Outbound)
     }
 

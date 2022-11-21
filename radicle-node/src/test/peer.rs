@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use cyphernet::crypto::ed25519::Curve25519;
 use std::collections::BTreeMap;
 use std::iter;
 use std::net;
@@ -6,7 +7,6 @@ use std::ops::{Deref, DerefMut};
 
 use log::*;
 
-use crate::address;
 use crate::address::Store;
 use crate::clock::{RefClock, Timestamp};
 use crate::crypto::test::signer::MockSigner;
@@ -23,6 +23,7 @@ use crate::storage::git::transport::remote;
 use crate::storage::{RemoteId, WriteStorage};
 use crate::test::arbitrary;
 use crate::test::simulator;
+use crate::{address, PeerAddr};
 use crate::{Link, LocalDuration, LocalTime};
 
 /// Service instantiation used for testing.
@@ -32,6 +33,7 @@ pub type Service<S, G> = service::Service<routing::Table, address::Book, S, G>;
 pub struct Peer<S, G> {
     pub name: &'static str,
     pub service: Service<S, G>,
+    pub id: cyphernet::addr::NodeId<Curve25519>,
     pub ip: net::IpAddr,
     pub rng: fastrand::Rng,
     pub local_time: LocalTime,
@@ -90,6 +92,7 @@ where
         name: &'static str,
         config: Config,
         ip: impl Into<net::IpAddr>,
+        id: cyphernet::addr::NodeId<Curve25519>,
         storage: S,
         addrs: address::Book,
         signer: G,
@@ -105,6 +108,7 @@ where
         Self {
             name,
             service,
+            id,
             ip,
             local_addr,
             rng,
@@ -122,8 +126,10 @@ where
         }
     }
 
-    pub fn address(&self) -> Address {
-        simulator::Peer::addr(self).into()
+    pub fn address(&self) -> PeerAddr {
+        // TODO: (max) Remove after adopting NodeId from cyphernet
+        let id = cyphernet::addr::NodeId::from_public_key(*self.id.as_ref());
+        PeerAddr::with(id, simulator::Peer::addr(self))
     }
 
     pub fn import_addresses<P>(&mut self, peers: P)
@@ -214,7 +220,7 @@ where
         self.service.connected(remote, Link::Inbound);
         self.receive(
             &remote,
-            Message::init(peer.node_id(), vec![Address::from(remote)]),
+            Message::init(peer.node_id(), vec![ConnectAddr::from(remote)]),
         );
 
         let mut msgs = self.messages(&remote);

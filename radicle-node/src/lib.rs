@@ -15,8 +15,13 @@ pub mod test;
 pub mod tests;
 pub mod wire;
 
+use cyphernet::addr::UniversalAddr;
+use cyphernet::crypto::ed25519::Curve25519;
+
 pub use nakamoto_net::{Io, Link, LocalDuration, LocalTime};
 pub use radicle::{collections, crypto, git, hash, identity, node, profile, rad, storage};
+
+pub type PeerAddr = cyphernet::addr::PeerAddr<Curve25519, UniversalAddr>;
 
 pub mod prelude {
     pub use crate::clock::Timestamp;
@@ -25,9 +30,10 @@ pub mod prelude {
     pub use crate::hash::Digest;
     pub use crate::identity::{Did, Id};
     pub use crate::service::filter::Filter;
-    pub use crate::service::message::Address;
+    pub use crate::service::message::ConnectAddr;
     pub use crate::service::{DisconnectReason, Event, Message, Network, NodeId};
     pub use crate::storage::refs::Refs;
     pub use crate::storage::WriteStorage;
+    pub use crate::PeerAddr;
     pub use crate::{LocalDuration, LocalTime};
 }

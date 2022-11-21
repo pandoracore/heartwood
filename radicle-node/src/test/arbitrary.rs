@@ -1,14 +1,13 @@
 use std::net;
 
 use bloomy::BloomFilter;
-use cyphernet::addr::UniversalAddr;
 use quickcheck::Arbitrary;
 
 use crate::crypto;
 use crate::prelude::{Id, NodeId, Refs, Timestamp};
 use crate::service::filter::{Filter, FILTER_SIZE_L, FILTER_SIZE_M, FILTER_SIZE_S};
 use crate::service::message::{
-    Address, Announcement, InventoryAnnouncement, Message, NodeAnnouncement, Ping,
+    Announcement, ConnectAddr, InventoryAnnouncement, Message, NodeAnnouncement, Ping,
     RefsAnnouncement, Subscribe, ZeroBytes,
 };
 use crate::wire::message::MessageType;
@@ -101,9 +100,9 @@ impl Arbitrary for Message {
     }
 }
 
-impl Arbitrary for Address {
+impl Arbitrary for ConnectAddr {
     fn arbitrary(g: &mut quickcheck::Gen) -> Self {
-        UniversalAddr::Direct(if bool::arbitrary(g) {
+        ConnectAddr::Host(if bool::arbitrary(g) {
             let ip = net::Ipv4Addr::from(u32::arbitrary(g));
             net::SocketAddr::from((ip, u16::arbitrary(g)))
         } else {
@@ -111,7 +110,6 @@ impl Arbitrary for Address {
             let ip = net::Ipv6Addr::from(octets);
             net::SocketAddr::from((ip, u16::arbitrary(g))).into()
         })
-        .into()
     }
 }
 

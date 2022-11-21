@@ -14,7 +14,7 @@ pub enum Io {
     /// There are some messages ready to be sent to a peer.
     Write(net::SocketAddr, Vec<Message>),
     /// Connect to a peer.
-    Connect(Address),
+    Connect(ConnectAddr),
     /// Disconnect from a peer.
     Disconnect(net::SocketAddr, DisconnectReason),
     /// Ask for a wakeup in a specified amount of time.
@@ -37,7 +37,7 @@ impl Reactor {
     }
 
     /// Connect to a peer.
-    pub fn connect(&mut self, addr: impl Into<Address>) {
+    pub fn connect(&mut self, addr: impl Into<ConnectAddr>) {
         self.io.push_back(Io::Connect(addr.into()));
     }
 

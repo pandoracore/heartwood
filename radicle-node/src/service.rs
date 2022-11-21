@@ -21,7 +21,6 @@ use nonempty::NonEmpty;
 use radicle::node::Features;
 use radicle::storage::{Namespaces, ReadStorage};
 
-use crate::address;
 use crate::address::AddressBook;
 use crate::clock::{RefClock, Timestamp};
 use crate::crypto;
@@ -30,10 +29,11 @@ use crate::git;
 use crate::identity::{Doc, Id};
 use crate::node;
 use crate::service::config::ProjectTracking;
-use crate::service::message::{Address, Announcement, AnnouncementMessage, Ping};
+use crate::service::message::{Announcement, AnnouncementMessage, ConnectAddr, Ping};
 use crate::service::message::{NodeAnnouncement, RefsAnnouncement};
 use crate::storage;
 use crate::storage::{Inventory, ReadRepository, RefUpdate, WriteRepository, WriteStorage};
+use crate::{address, PeerAddr};
 
 pub use crate::node::NodeId;
 pub use crate::service::config::{Config, Network};
@@ -490,7 +490,9 @@ where
     }
 
     pub fn attempted(&mut self, addr: &std::net::SocketAddr) {
-        let address = Address::from(*addr);
+        // TODO: (max) Remove after adopting NodeId from cyphernet
+        let id = cyphernet::addr::NodeId::from_public_key(self.node_id().0.into());
+        let address = PeerAddr::with(id, *addr);
         let ip = addr.ip();
         let persistent = self.config.is_persistent(&address);
         let peer = self
@@ -511,7 +513,9 @@ where
 
     pub fn connected(&mut self, addr: net::SocketAddr, link: Link) {
         let ip = addr.ip();
-        let address = addr.into();
+        // TODO: (max) Remove after adopting NodeId from cyphernet
+        let id = cyphernet::addr::NodeId::from_public_key(self.node_id().0.into());
+        let address = PeerAddr::with(id, addr);
 
         debug!("Connected to {} ({:?})", ip, link);
 
@@ -552,7 +556,6 @@ where
         reason: &nakamoto::DisconnectReason<DisconnectReason>,
     ) {
         let since = self.local_time();
-        let address = Address::from(*addr);
         let ip = addr.ip();
 
         debug!("Disconnected from {} ({})", ip, reason);
@@ -561,7 +564,7 @@ where
             session.state = session::State::Disconnected { since };
 
             // Attempt to re-connect to persistent peers.
-            if self.config.is_persistent(&address) && session.attempts() < MAX_CONNECTION_ATTEMPTS {
+            if self.config.is_persistent(&addr) && session.attempts() < MAX_CONNECTION_ATTEMPTS {
                 if reason.is_dial_err() {
                     return;
                 }
@@ -958,8 +961,8 @@ where
         }
     }
 
-    fn choose_addresses(&mut self) -> Vec<Address> {
-        let mut initializing: Vec<Address> = Vec::new();
+    fn choose_addresses(&mut self) -> Vec<ConnectAddr> {
+        let mut initializing: Vec<ConnectAddr> = Vec::new();
         let mut negotiated: HashMap<NodeId, &Session> = HashMap::new();
         for s in self.sessions.values() {
             if !s.link.is_outbound() {

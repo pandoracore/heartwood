@@ -1,7 +1,6 @@
-use std::{io, mem, net};
+use std::{io, mem};
 
 use byteorder::{NetworkEndian, ReadBytesExt};
-use cyphernet::addr::UniversalAddr;
 
 use crate::prelude::*;
 use crate::service::message::*;
@@ -80,9 +79,22 @@ impl From<AddressType> for u8 {
     }
 }
 
-impl From<&Address> for AddressType {
-    fn from(a: &Address) -> Self {
-        if matches!(a.into(), UniversalAddr::Proxied(_)) {
+impl From<&ConnectAddr> for AddressType {
+    fn from(a: &ConnectAddr) -> Self {
+        if matches!(a, ConnectAddr::Node(peer) if peer.addr().has_proxy()) {
+            return AddressType::Socks5;
+        }
+        if a.to_socket_addr().is_ipv4() {
+            return AddressType::Ipv4;
+        } else {
+            return AddressType::Ipv6;
+        }
+    }
+}
+
+impl From<&PeerAddr> for AddressType {
+    fn from(a: &PeerAddr) -> Self {
+        if a.addr().has_proxy() {
             return AddressType::Socks5;
         }
         if a.to_socket_addr().is_ipv4() {
@@ -221,7 +233,7 @@ impl wire::Decode for Message {
             Ok(MessageType::Initialize) => {
                 let id = NodeId::decode(reader)?;
                 let version = u32::decode(reader)?;
-                let addrs = Vec::<Address>::decode(reader)?;
+                let addrs = Vec::<ConnectAddr>::decode(reader)?;
 
                 Ok(Self::Initialize { id, version, addrs })
             }
@@ -286,7 +298,7 @@ impl wire::Decode for Message {
     }
 }
 
-impl wire::Encode for Address {
+impl wire::Encode for ConnectAddr {
     fn encode<W: std::io::Write + ?Sized>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         todo!()
         /*
@@ -309,7 +321,7 @@ impl wire::Encode for Address {
     }
 }
 
-impl wire::Decode for Address {
+impl wire::Decode for ConnectAddr {
     fn decode<R: std::io::Read + ?Sized>(reader: &mut R) -> Result<Self, wire::Error> {
         todo!()
         /*
@@ -443,9 +455,9 @@ mod tests {
     }
 
     #[quickcheck]
-    fn prop_addr(addr: Address) {
+    fn prop_addr(addr: ConnectAddr) {
         assert_eq!(
-            wire::deserialize::<Address>(&wire::serialize(&addr)).unwrap(),
+            wire::deserialize::<ConnectAddr>(&wire::serialize(&addr)).unwrap(),
             addr
         );
     }

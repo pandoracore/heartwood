@@ -30,7 +30,7 @@ pub enum State {
         id: NodeId,
         since: LocalTime,
         /// Addresses this peer is reachable on.
-        addrs: Vec<message::Address>,
+        addrs: Vec<message::ConnectAddr>,
         ping: PingState,
     },
     /// When a peer is disconnected.

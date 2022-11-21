@@ -1,7 +1,10 @@
+use std::net;
+
 use crate::collections::HashSet;
 use crate::identity::{Id, PublicKey};
 use crate::service::filter::Filter;
-use crate::service::message::Address;
+use crate::service::message::ConnectAddr;
+use crate::PeerAddr;
 
 /// Peer-to-peer network.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
@@ -45,9 +48,11 @@ pub enum RemoteTracking {
 pub struct Config {
     /// Peers to connect to on startup.
     /// Connections to these peers will be maintained.
-    pub connect: Vec<Address>,
+    pub connect: Vec<PeerAddr>,
     /// Specify the node's public addresses
-    pub external_addresses: Vec<Address>,
+    pub external_addresses: Vec<PeerAddr>,
+    /// SOCKS5 proxy to use for connecting external peers
+    pub socks5_proxy: Option<net::SocketAddr>,
     /// Peer-to-peer network.
     pub network: Network,
     /// Project tracking policy.
@@ -57,7 +62,7 @@ pub struct Config {
     /// Whether or not our node should relay inventories.
     pub relay: bool,
     /// List of addresses to listen on for protocol connections.
-    pub listen: Vec<Address>,
+    pub listen: Vec<ConnectAddr>,
 }
 
 impl Default for Config {
@@ -65,6 +70,7 @@ impl Default for Config {
         Self {
             connect: Vec::default(),
             external_addresses: vec![],
+            socks5_proxy: None,
             network: Network::default(),
             project_tracking: ProjectTracking::default(),
             remote_tracking: RemoteTracking::default(),
@@ -75,7 +81,7 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn is_persistent(&self, addr: &Address) -> bool {
+    pub fn is_persistent(&self, addr: &PeerAddr) -> bool {
         self.connect.contains(addr)
     }
 
