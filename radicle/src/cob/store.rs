@@ -109,7 +109,7 @@ impl<'a> Store<'a, ()> {
 impl<'a, T> Store<'a, T> {
     /// Get this store's author.
     pub fn author(&self) -> Author {
-        Author::new(self.whoami)
+        Author::new(NodeId::from_public_key(self.whoami))
     }
 
     /// Get the public key associated with this store.
@@ -132,7 +132,9 @@ impl<'a, T: FromHistory> Store<'a, T> {
             signer,
             &self.project,
             Update {
-                author: Some(cob::Author::from(*signer.public_key())),
+                author: Some(cob::Author::from(NodeId::from_public_key(
+                    *signer.public_key(),
+                ))),
                 object_id,
                 typename: T::type_name().clone(),
                 message: message.to_owned(),
@@ -153,7 +155,9 @@ impl<'a, T: FromHistory> Store<'a, T> {
             signer,
             &self.project,
             Create {
-                author: Some(cob::Author::from(*signer.public_key())),
+                author: Some(cob::Author::from(NodeId::from_public_key(
+                    *signer.public_key(),
+                ))),
                 typename: T::type_name().clone(),
                 message: message.to_owned(),
                 contents,

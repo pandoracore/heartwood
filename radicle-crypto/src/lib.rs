@@ -156,6 +156,10 @@ impl PublicKey {
     pub fn from_pem(pem: &str) -> Result<Self, ed25519::Error> {
         ed25519::PublicKey::from_pem(pem).map(Self)
     }
+
+    pub fn from_public_key(pk: Self) -> Self {
+        pk
+    }
 }
 
 /// The private/signing key.
@@ -304,6 +308,10 @@ impl PublicKey {
         buf[2..].copy_from_slice(self.0.deref());
 
         multibase::encode(multibase::Base::Base58Btc, buf)
+    }
+
+    pub fn to_public_key(&self) -> Self {
+        *self
     }
 }
 

@@ -43,7 +43,7 @@ impl From<Did> for Author {
 impl From<NodeId> for Author {
     fn from(node_id: NodeId) -> Self {
         Self {
-            did: Did::from(node_id),
+            did: Did::from(node_id.to_public_key()),
         }
     }
 }

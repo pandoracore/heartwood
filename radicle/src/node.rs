@@ -6,6 +6,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 
+#[cfg(not(feature = "cyphernet"))]
 use crate::crypto::PublicKey;
 use crate::identity::Id;
 
@@ -43,7 +44,12 @@ pub trait Handle {
 }
 
 /// Public node & device identifier.
+#[cfg(not(feature = "cyphernet"))]
 pub type NodeId = PublicKey;
+
+/// Public node & device identifier.
+#[cfg(feature = "cyphernet")]
+pub type NodeId = cyphernet::addr::NodeId<crypto::Ed25519>;
 
 /// Node controller.
 #[derive(Debug)]

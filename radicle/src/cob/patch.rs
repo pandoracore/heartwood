@@ -334,7 +334,7 @@ impl<'a> PatchStore<'a> {
     ) -> Result<Merge, Error> {
         let timestamp = Timestamp::now();
         let merge = Merge {
-            node: *signer.public_key(),
+            node: NodeId::from_public_key(*signer.public_key()),
             commit,
             timestamp,
         };
@@ -375,7 +375,9 @@ impl<'a> PatchStore<'a> {
         &'b self,
         who: &'b PublicKey,
     ) -> Result<impl Iterator<Item = (PatchId, Patch)> + '_, Error> {
-        Ok(self.proposed()?.filter(move |(_, p)| p.author.id() == who))
+        Ok(self
+            .proposed()?
+            .filter(move |(_, p)| p.author.id().as_ref() == who))
     }
 }
 

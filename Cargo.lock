@@ -482,10 +482,11 @@ dependencies = [
 [[package]]
 name = "cyphernet"
 version = "0.1.0"
-source = "git+https://github.com/Internet2-WG/rust-cyphernet#e29a5f994e3d63fd2a41c47323930c243d513e84"
+source = "git+https://github.com/Internet2-WG/rust-cyphernet#4cbe7d7b1f308b14e6acd4aad355f30dd23b0aef"
 dependencies = [
  "amplify_derive",
  "multibase",
+ "serde",
  "socks",
 ]
 
