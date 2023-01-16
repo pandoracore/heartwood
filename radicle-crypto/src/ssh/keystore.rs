@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
@@ -6,7 +5,7 @@ use std::{fs, io};
 use thiserror::Error;
 use zeroize::Zeroizing;
 
-use crate::{keypair, KeyPair, Negotiator, PublicKey, SecretKey, Signature, Signer, SignerError};
+use crate::{keypair, KeyPair, PublicKey, SecretKey, Signature, Signer, SignerError};
 
 /// A secret key passphrase.
 pub type Passphrase = Zeroizing<String>;
@@ -150,36 +149,6 @@ impl Signer for MemorySigner {
 
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, SignerError> {
         Ok(self.sign(msg))
-    }
-}
-
-#[cfg(feature = "cyphernet")]
-impl Negotiator for MemorySigner {
-    fn secret_key(&self) -> cyphernet::crypto::ed25519::PrivateKey {
-        (self.secret.deref().deref().clone()).into()
-    }
-}
-
-#[cfg(feature = "cyphernet")]
-impl cyphernet::crypto::Ecdh for MemorySigner {
-    type Secret = crate::SharedSecret;
-    type Err = ed25519_compact::Error;
-
-    fn ecdh(&self, other: &PublicKey) -> Result<crate::SharedSecret, ed25519_compact::Error> {
-        let pk = ed25519_compact::x25519::PublicKey::from_ed25519(other)?;
-        let sk = ed25519_compact::x25519::SecretKey::from_ed25519(&self.secret)?;
-        let ss = pk.dh(&sk)?;
-
-        Ok(*ss)
-    }
-}
-
-#[cfg(feature = "cyphernet")]
-impl cyphernet::crypto::EcSk for MemorySigner {
-    type Pk = PublicKey;
-
-    fn to_pk(&self) -> Self::Pk {
-        self.public
     }
 }
 

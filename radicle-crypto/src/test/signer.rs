@@ -1,4 +1,4 @@
-use crate::{KeyPair, Negotiator, PublicKey, SecretKey, Seed, Signature, Signer, SignerError};
+use crate::{KeyPair, PublicKey, SecretKey, Seed, Signature, Signer, SignerError};
 
 #[derive(Debug, Clone)]
 pub struct MockSigner {
@@ -69,31 +69,5 @@ impl Signer for MockSigner {
 
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, SignerError> {
         Ok(self.sign(msg))
-    }
-}
-
-#[cfg(feature = "cyphernet")]
-impl Negotiator for MockSigner {
-    fn secret_key(&self) -> cyphernet::crypto::ed25519::PrivateKey {
-        self.sk.clone().0.into()
-    }
-}
-
-#[cfg(feature = "cyphernet")]
-impl cyphernet::crypto::Ecdh for MockSigner {
-    type Secret = crate::SharedSecret;
-    type Err = crate::Error;
-
-    fn ecdh(&self, _pk: &Self::Pk) -> Result<Self::Secret, Self::Err> {
-        Ok([0; 32])
-    }
-}
-
-#[cfg(feature = "cyphernet")]
-impl cyphernet::crypto::EcSk for MockSigner {
-    type Pk = PublicKey;
-
-    fn to_pk(&self) -> Self::Pk {
-        self.pk
     }
 }
