@@ -4,10 +4,11 @@ use std::thread::JoinHandle;
 use std::{env, io, net, process, thread};
 
 use crossbeam_channel as chan;
-use netservices::resources::SplitIo;
+use cyphernet::EcSign;
 use netservices::tunnel::Tunnel;
-use netservices::NetSession;
+use netservices::{NetSession, SplitIo};
 
+use radicle::crypto::Signer;
 use radicle::identity::Id;
 use radicle::storage::{ReadRepository, RefUpdate, WriteRepository, WriteStorage};
 use radicle::Storage;
@@ -15,30 +16,30 @@ use reactor::poller::popol;
 
 use crate::service::reactor::Fetch;
 use crate::service::{FetchError, FetchResult};
-use crate::wire::{Noise, NoiseReader, NoiseWriter};
+use crate::wire::{WireReader, WireSession, WireWriter};
 
 /// Worker request.
-pub struct WorkerReq {
+pub struct WorkerReq<G: Signer + EcSign> {
     pub fetch: Fetch,
-    pub session: Noise,
+    pub session: WireSession<G>,
     pub drain: Vec<u8>,
-    pub channel: chan::Sender<WorkerResp>,
+    pub channel: chan::Sender<WorkerResp<G>>,
 }
 
 /// Worker response.
-pub struct WorkerResp {
+pub struct WorkerResp<G: Signer + EcSign> {
     pub result: FetchResult,
-    pub session: Noise,
+    pub session: WireSession<G>,
 }
 
 /// A worker that replicates git objects.
-struct Worker {
+struct Worker<G: Signer + EcSign> {
     storage: Storage,
-    tasks: chan::Receiver<WorkerReq>,
+    tasks: chan::Receiver<WorkerReq<G>>,
     timeout: time::Duration,
 }
 
-impl Worker {
+impl<G: Signer + EcSign> Worker<G> {
     /// Waits for tasks and runs them. Blocks indefinitely unless there is an error receiving
     /// the next task.
     fn run(self) -> Result<(), chan::RecvError> {
@@ -48,7 +49,7 @@ impl Worker {
         }
     }
 
-    fn process(&self, task: WorkerReq) {
+    fn process(&self, task: WorkerReq<G>) {
         let WorkerReq {
             fetch,
             session,
@@ -76,8 +77,8 @@ impl Worker {
         &self,
         fetch: &Fetch,
         drain: Vec<u8>,
-        mut session: Noise,
-    ) -> (Noise, Result<Vec<RefUpdate>, FetchError>) {
+        mut session: WireSession<G>,
+    ) -> (WireSession<G>, Result<Vec<RefUpdate>, FetchError>) {
         if fetch.initiated {
             log::debug!(target: "worker", "Worker processing outgoing fetch for {}", fetch.repo);
 
@@ -92,7 +93,7 @@ impl Worker {
         } else {
             log::debug!(target: "worker", "Worker processing incoming fetch for {}", fetch.repo);
 
-            if let Err(err) = session.set_nonblocking(false) {
+            if let Err(err) = session.as_connection_mut().set_nonblocking(false) {
                 return (session, Err(err.into()));
             }
             let (mut stream_r, mut stream_w) = match session.split_io() {
@@ -102,7 +103,7 @@ impl Worker {
                 }
             };
             let result = self.upload_pack(fetch, drain, &mut stream_r, &mut stream_w);
-            let session = Noise::from_split_io(stream_r, stream_w);
+            let session = WireSession::from_split_io(stream_r, stream_w);
 
             (session, result)
         }
@@ -111,7 +112,7 @@ impl Worker {
     fn fetch(
         &self,
         fetch: &Fetch,
-        tunnel: &mut Tunnel<Noise>,
+        tunnel: &mut Tunnel<WireSession<G>>,
     ) -> Result<Vec<RefUpdate>, FetchError> {
         let repo = self.storage.repository(fetch.repo)?;
         let tunnel_addr = tunnel.local_addr()?;
@@ -163,8 +164,8 @@ impl Worker {
         &self,
         fetch: &Fetch,
         drain: Vec<u8>,
-        stream_r: &mut NoiseReader,
-        stream_w: &mut NoiseWriter,
+        stream_r: &mut WireReader,
+        stream_w: &mut WireWriter<G>,
     ) -> Result<Vec<RefUpdate>, FetchError> {
         let repo = self.storage.repository(fetch.repo)?;
         let mut child = process::Command::new("git")
@@ -246,11 +247,11 @@ pub struct WorkerPool {
 
 impl WorkerPool {
     /// Create a new worker pool with the given parameters.
-    pub fn with(
+    pub fn with<G: Signer + EcSign + 'static>(
         capacity: usize,
         timeout: time::Duration,
         storage: Storage,
-        tasks: chan::Receiver<WorkerReq>,
+        tasks: chan::Receiver<WorkerReq<G>>,
         name: String,
     ) -> Self {
         let mut pool = Vec::with_capacity(capacity);

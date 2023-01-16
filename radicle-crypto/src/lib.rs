@@ -25,13 +25,6 @@ pub struct Unverified;
 /// Output of a Diffie-Hellman key exchange.
 pub type SharedSecret = [u8; 32];
 
-/// Trait used for Diffie–Hellman key exchange.
-#[cfg(feature = "cyphernet")]
-pub trait Negotiator {
-    /// Return the secret key in `cyphernet` format.
-    fn secret_key(&self) -> cyphernet::ed25519::PrivateKey;
-}
-
 /// Error returned if signing fails, eg. due to an HSM or KMS.
 #[derive(Debug, Clone, Error)]
 #[error(transparent)]

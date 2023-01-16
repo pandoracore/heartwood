@@ -2,52 +2,49 @@
 //!
 //! We use the Noise XK handshake pattern to establish an encrypted stream with a remote peer.
 //! The handshake itself is implemented in the external [`netservices`] crate.
+use amplify::Wrapper;
 use std::collections::VecDeque;
+use std::fmt::Debug;
+use std::net::SocketAddr;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::prelude::RawFd;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{io, net};
 
-use amplify::Wrapper;
 use crossbeam_channel as chan;
-use cyphernet::addr::PeerAddr;
-use nakamoto_net::{Link, LocalTime};
-use netservices::noise::{NoiseXk, NoiseXkReader, NoiseXkWriter};
-use netservices::resources::{ListenerEvent, NetAccept, NetResource, SessionEvent};
-use netservices::socks5::Socks5;
-use netservices::{Authenticator, NetSession};
+use cyphernet::{Cert, Digest, EcSign, Sha256};
+use nakamoto_net::LocalTime;
+use netservices::resource::{ListenerEvent, NetAccept, NetTransport, SessionEvent};
+use netservices::session::ProtocolArtifact;
+use netservices::{LinkDirection, NetConnection, NetSession};
 
 use radicle::collections::HashMap;
-use radicle::crypto::Negotiator;
+use radicle::crypto::Signature;
 use radicle::node::NodeId;
 use radicle::storage::WriteStorage;
 
 use crate::crypto::Signer;
 use crate::service::reactor::{Fetch, Io};
 use crate::service::{routing, session, DisconnectReason, Message, Service};
-use crate::wire::{Decode, Encode};
+use crate::wire::{Decode, Encode, WireSession};
 use crate::worker::{WorkerReq, WorkerResp};
 use crate::{address, service};
 
-pub type Noise = NoiseXk<cyphernet::crypto::ed25519::PrivateKey>;
-pub type NoiseReader = NoiseXkReader<cyphernet::crypto::ed25519::PrivateKey>;
-pub type NoiseWriter = NoiseXkWriter<cyphernet::crypto::ed25519::PrivateKey>;
-
 /// Reactor action.
-type Action = reactor::Action<NetAccept<Noise>, NetResource<Noise>>;
+type Action<G> = reactor::Action<NetAccept<WireSession<G>>, NetTransport<WireSession<G>>>;
 
 /// Peer connection state machine.
 #[derive(Debug, Display)]
-enum Peer {
+enum Peer<G: Signer + EcSign> {
     /// The initial state before handshake is completed.
     #[display("<connecting>")]
-    Connecting { link: Link },
+    Connecting { link: LinkDirection },
 
     /// The state after handshake is completed.
     /// Peers in this state are handled by the underlying service.
     #[display("{id}")]
-    Connected { link: Link, id: NodeId },
+    Connected { link: LinkDirection, id: NodeId },
 
     /// The state after a peer was disconnected, either during handshake,
     /// or once connected.
@@ -62,22 +59,22 @@ enum Peer {
     #[display("<upgrading>{id}")]
     Upgrading {
         fetch: Fetch,
-        link: Link,
+        link: LinkDirection,
         id: NodeId,
     },
 
     /// The peer is now upgraded and we are in control of the socket.
     #[display("<upgraded>{id}")]
     Upgraded {
-        link: Link,
+        link: LinkDirection,
         id: NodeId,
-        response: chan::Receiver<WorkerResp>,
+        response: chan::Receiver<WorkerResp<G>>,
     },
 }
 
-impl Peer {
+impl<G: Signer + EcSign> Peer<G> {
     /// Return a new connecting peer.
-    fn connecting(link: Link) -> Self {
+    fn connecting(link: LinkDirection) -> Self {
         Self::Connecting { link }
     }
 
@@ -100,7 +97,7 @@ impl Peer {
         } else if let Self::Connecting { .. } = self {
             *self = Self::Disconnected { id: None, reason };
         } else {
-            panic!("Peer::disconnected: session is not connected ({:?})", self);
+            panic!("Peer::disconnected: session is not connected ({self})");
         }
     }
 
@@ -118,7 +115,7 @@ impl Peer {
     }
 
     /// Switch to upgraded state.
-    fn upgraded(&mut self, listener: chan::Receiver<WorkerResp>) -> Fetch {
+    fn upgraded(&mut self, listener: chan::Receiver<WorkerResp<G>>) -> Fetch {
         if let Self::Upgrading { fetch, id, link } = self {
             let fetch = fetch.clone();
             log::debug!(target: "transport", "Peer {id} upgraded for fetch {}", fetch.repo);
@@ -148,37 +145,38 @@ impl Peer {
 }
 
 /// Transport protocol implementation for a set of peers.
-pub struct Transport<R, S, W, G: Negotiator> {
+pub struct Wire<R, S, W, G: Signer + EcSign> {
     /// Backing service instance.
     service: Service<R, S, W, G>,
     /// Worker pool interface.
-    worker: chan::Sender<WorkerReq>,
-    auth: Authenticator,
-    /// Used to performs X25519 key exchange.
-    keypair: G,
+    worker: chan::Sender<WorkerReq<G>>,
+    /// Used for authorization; keeps local identity.
+    cert: Cert<Signature>,
+    /// Used for authorization to sign the remote challenge.
+    signer: G,
+    /// Address of SOCKS5 proxy.
+    proxy_addr: SocketAddr,
     /// Internal queue of actions to send to the reactor.
-    actions: VecDeque<Action>,
+    actions: VecDeque<Action<G>>,
     /// Peer sessions.
-    peers: HashMap<RawFd, Peer>,
-    /// SOCKS5 proxy address.
-    proxy: Socks5,
+    peers: HashMap<RawFd, Peer<G>>,
     /// Buffer for incoming peer data.
     read_queue: VecDeque<u8>,
 }
 
-impl<R, S, W, G> Transport<R, S, W, G>
+impl<R, S, W, G> Wire<R, S, W, G>
 where
     R: routing::Store,
     S: address::Store,
     W: WriteStorage + 'static,
-    G: Signer + Negotiator,
+    G: Signer + EcSign,
 {
     pub fn new(
         mut service: Service<R, S, W, G>,
-        worker: chan::Sender<WorkerReq>,
-        auth: Authenticator,
-        keypair: G,
-        proxy: Socks5,
+        worker: chan::Sender<WorkerReq<G>>,
+        cert: Cert<Signature>,
+        signer: G,
+        proxy_addr: SocketAddr,
         clock: LocalTime,
     ) -> Self {
         service.initialize(clock);
@@ -186,23 +184,23 @@ where
         Self {
             service,
             worker,
-            auth,
-            keypair,
-            proxy,
+            cert,
+            signer,
+            proxy_addr,
             actions: VecDeque::new(),
             peers: HashMap::default(),
             read_queue: VecDeque::new(),
         }
     }
 
-    fn peer_mut_by_fd(&mut self, fd: RawFd) -> &mut Peer {
+    fn peer_mut_by_fd(&mut self, fd: RawFd) -> &mut Peer<G> {
         self.peers.get_mut(&fd).unwrap_or_else(|| {
             log::error!(target: "transport", "Peer with fd {fd} was not found");
             panic!("peer with fd {fd} is not known");
         })
     }
 
-    fn fd_by_id(&self, node_id: &NodeId) -> (RawFd, &Peer) {
+    fn fd_by_id(&self, node_id: &NodeId) -> (RawFd, &Peer<G>) {
         self.peers
             .iter()
             .find(|(_, peer)| match peer {
@@ -267,18 +265,23 @@ where
         self.actions.push_back(Action::UnregisterTransport(fd));
     }
 
-    fn upgraded(&mut self, session: NetResource<Noise>) {
-        let fd = session.as_raw_fd();
+    fn upgraded(&mut self, transport: NetTransport<WireSession<G>>) {
+        let fd = transport.as_raw_fd();
         let peer = self.peer_mut_by_fd(fd);
-        let (send, recv) = chan::bounded::<WorkerResp>(1);
+        let (send, recv) = chan::bounded::<WorkerResp<G>>(1);
         let fetch = peer.upgraded(recv);
         log::debug!(target: "transport", "Peer {peer}(fd={fd}) got upgraded");
+
+        let session = match transport.into_session() {
+            Ok(session) => session,
+            Err(_) => panic!("write buffer is not empty when doing upgrade"),
+        };
 
         if self
             .worker
             .send(WorkerReq {
                 fetch,
-                session: session.into_session(),
+                session,
                 drain: self.read_queue.drain(..).collect(),
                 channel: send,
             })
@@ -288,16 +291,22 @@ where
         }
     }
 
-    fn fetch_complete(&mut self, resp: WorkerResp) {
+    fn fetch_complete(&mut self, resp: WorkerResp<G>) {
         let session = resp.session;
-        let fd = session.as_raw_fd();
+        let fd = session.as_connection().as_raw_fd();
         let peer = self.peer_mut_by_fd(fd);
 
         let session = if let Peer::Disconnected { .. } = peer {
             log::error!(target: "transport", "Peer with fd {fd} is already disconnected");
             return;
         } else if let Peer::Upgraded { link, .. } = peer {
-            NetResource::with_session(session, link.is_inbound())
+            match NetTransport::with_session(session, *link) {
+                Ok(session) => session,
+                Err(err) => {
+                    log::error!(target: "transport", "Session downgrade has failed due to {err}");
+                    return;
+                }
+            }
         } else {
             todo!();
         };
@@ -308,15 +317,15 @@ where
     }
 }
 
-impl<R, S, W, G> reactor::Handler for Transport<R, S, W, G>
+impl<R, S, W, G> reactor::Handler for Wire<R, S, W, G>
 where
     R: routing::Store + Send,
     S: address::Store + Send,
     W: WriteStorage + Send + 'static,
-    G: Signer + Negotiator + Send,
+    G: Signer + EcSign<Pk = NodeId, Sig = Signature> + Clone + Send,
 {
-    type Listener = NetAccept<Noise>;
-    type Transport = NetResource<Noise>;
+    type Listener = NetAccept<WireSession<G>>;
+    type Transport = NetTransport<WireSession<G>>;
     type Command = service::Command;
 
     fn tick(&mut self, _time: Duration) {
@@ -343,23 +352,32 @@ where
     fn handle_listener_event(
         &mut self,
         socket_addr: net::SocketAddr,
-        event: ListenerEvent<Noise>,
+        event: ListenerEvent<WireSession<G>>,
         _: Duration,
     ) {
         match event {
-            ListenerEvent::Accepted(session) => {
+            ListenerEvent::Accepted(connection) => {
                 log::debug!(
                     target: "transport",
-                    "Accepted inbound peer connection from {}..",
-                    session.transient_addr()
+                    "Accepting inbound peer connection from {}..",
+                    connection.remote_addr()
                 );
-                self.peers
-                    .insert(session.as_raw_fd(), Peer::connecting(Link::Inbound));
+                self.peers.insert(
+                    connection.as_raw_fd(),
+                    Peer::connecting(LinkDirection::Inbound),
+                );
 
-                let transport = match NetResource::<Noise>::new(session) {
+                let session = WireSession::accept::<{ Sha256::OUTPUT_LEN }>(
+                    connection,
+                    self.cert.clone(),
+                    vec![],
+                    self.signer.clone(),
+                );
+
+                let transport = match NetTransport::with_session(session, LinkDirection::Inbound) {
                     Ok(transport) => transport,
                     Err(err) => {
-                        log::error!(target: "transport", "Failed to upgrade accepted peer socket: {err}");
+                        log::error!(target: "transport", "Failed to create reactor resource for the accepted connection: {err}");
                         return;
                     }
                 };
@@ -373,14 +391,22 @@ where
         }
     }
 
-    fn handle_transport_event(&mut self, fd: RawFd, event: SessionEvent<Noise>, _: Duration) {
+    fn handle_transport_event(
+        &mut self,
+        fd: RawFd,
+        event: SessionEvent<WireSession<G>>,
+        _: Duration,
+    ) {
         match event {
-            SessionEvent::Established(node_id) => {
+            SessionEvent::Established(ProtocolArtifact {
+                state: Cert { pk: node_id, .. },
+                ..
+            }) => {
                 log::debug!(target: "transport", "Session established with {node_id}");
 
                 let conflicting = self
                     .connected()
-                    .filter(|(_, id)| ***id == node_id.into())
+                    .filter(|(_, id)| **id == node_id)
                     .map(|(fd, _)| fd)
                     .collect::<Vec<_>>();
 
@@ -409,7 +435,6 @@ where
                 };
                 let link = *link;
 
-                let node_id = node_id.into_inner().into();
                 peer.connected(node_id);
                 self.service.connected(node_id, link);
             }
@@ -450,7 +475,10 @@ where
         self.service.command(cmd);
     }
 
-    fn handle_error(&mut self, err: reactor::Error<NetAccept<Noise>, NetResource<Noise>>) {
+    fn handle_error(
+        &mut self,
+        err: reactor::Error<NetAccept<WireSession<G>>, NetTransport<WireSession<G>>>,
+    ) {
         match &err {
             reactor::Error::ListenerUnknown(id) => {
                 // TODO: What are we supposed to do here? Remove this error.
@@ -525,14 +553,14 @@ where
     }
 }
 
-impl<R, S, W, G> Iterator for Transport<R, S, W, G>
+impl<R, S, W, G> Iterator for Wire<R, S, W, G>
 where
     R: routing::Store,
     S: address::Store,
     W: WriteStorage + 'static,
-    G: Signer + Negotiator,
+    G: Signer + EcSign<Pk = NodeId, Sig = Signature>,
 {
-    type Item = Action;
+    type Item = Action<G>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(ev) = self.service.next() {
@@ -562,18 +590,28 @@ where
                         break;
                     }
 
-                    match NetResource::<Noise>::connect_nonblocking(
-                        PeerAddr::new((*node_id).into(), addr.to_inner()),
-                        // TODO: Once the API supports it, we can pass an opaque type here.
-                        &(self.keypair.secret_key(), self.auth),
-                        &self.proxy,
-                    ) {
+                    match WireSession::connect_nonblocking::<{ Sha256::OUTPUT_LEN }>(
+                        addr.to_inner(),
+                        self.cert,
+                        vec![node_id],
+                        self.signer.clone(),
+                        self.proxy_addr.into(),
+                        false,
+                    )
+                    .and_then(|session| {
+                        NetTransport::<WireSession<G>>::with_session(
+                            session,
+                            LinkDirection::Outbound,
+                        )
+                    }) {
                         Ok(transport) => {
                             self.service.attempted(node_id, &addr);
                             // TODO: Keep track of peer address for when peer disconnects before
                             // handshake is complete.
-                            self.peers
-                                .insert(transport.as_raw_fd(), Peer::connecting(Link::Outbound));
+                            self.peers.insert(
+                                transport.as_raw_fd(),
+                                Peer::connecting(LinkDirection::Outbound),
+                            );
 
                             self.actions
                                 .push_back(reactor::Action::RegisterTransport(transport));

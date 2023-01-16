@@ -10,9 +10,10 @@ use std::sync::Arc;
 use std::{fmt, io};
 
 use log::*;
-use nakamoto_net::{Link, LocalDuration, LocalTime};
+use nakamoto_net::{LocalDuration, LocalTime};
+use netservices::LinkDirection;
 
-use crate::crypto::{Negotiator, Signer};
+use crate::crypto::Signer;
 use crate::prelude::Address;
 use crate::service::reactor::Io;
 use crate::service::{DisconnectReason, Event, Message, NodeId};
@@ -52,7 +53,7 @@ pub enum Input {
         /// Remote peer id.
         id: NodeId,
         /// Link direction.
-        link: Link,
+        link: LinkDirection,
     },
     /// Disconnected from peer.
     Disconnected(NodeId, Rc<DisconnectReason>),
@@ -85,12 +86,12 @@ impl fmt::Display for Scheduled {
             }
             Input::Connected {
                 id: addr,
-                link: Link::Inbound,
+                link: LinkDirection::Inbound,
                 ..
             } => write!(f, "{} <== {}: Connected", self.node, addr),
             Input::Connected {
                 id: addr,
-                link: Link::Outbound,
+                link: LinkDirection::Outbound,
                 ..
             } => write!(f, "{} ==> {}: Connected", self.node, addr),
             Input::Connecting { id, .. } => {
@@ -190,7 +191,7 @@ pub struct Simulation<S, G> {
     signer: PhantomData<G>,
 }
 
-impl<S: WriteStorage + 'static, G: Signer + Negotiator> Simulation<S, G> {
+impl<S: WriteStorage + 'static, G: Signer> Simulation<S, G> {
     /// Create a new simulation.
     pub fn new(time: LocalTime, rng: fastrand::Rng, opts: Options) -> Self {
         Self {
@@ -511,7 +512,7 @@ impl<S: WriteStorage + 'static, G: Signer + Negotiator> Simulation<S, G> {
                         remote: node,
                         input: Input::Connected {
                             id: node,
-                            link: Link::Inbound,
+                            link: LinkDirection::Inbound,
                         },
                     },
                 );
@@ -523,7 +524,7 @@ impl<S: WriteStorage + 'static, G: Signer + Negotiator> Simulation<S, G> {
                         node,
                         input: Input::Connected {
                             id: remote,
-                            link: Link::Outbound,
+                            link: LinkDirection::Outbound,
                         },
                     },
                 );

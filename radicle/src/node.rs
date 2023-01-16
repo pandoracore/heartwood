@@ -29,7 +29,11 @@ pub const RESPONSE_NOOP: &str = "noop";
 #[wrapper_mut(DerefMut)]
 pub struct Address(NetAddr<HostName>);
 
-impl cyphernet::addr::Host for Address {}
+impl cyphernet::addr::Host for Address {
+    fn requires_proxy(&self) -> bool {
+        self.0.requires_proxy()
+    }
+}
 impl cyphernet::addr::Addr for Address {
     fn port(&self) -> u16 {
         self.0.port()

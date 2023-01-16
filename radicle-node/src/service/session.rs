@@ -1,7 +1,9 @@
+use netservices::LinkDirection;
+
 use crate::service::message;
 use crate::service::message::Message;
 use crate::service::storage;
-use crate::service::{Id, Link, LocalTime, NodeId, Reactor, Rng};
+use crate::service::{Id, LocalTime, NodeId, Reactor, Rng};
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub enum PingState {
@@ -68,7 +70,7 @@ pub struct Session {
     /// Peer id.
     pub id: NodeId,
     /// Connection direction.
-    pub link: Link,
+    pub link: LinkDirection,
     /// Whether we should attempt to re-connect
     /// to this peer upon disconnection.
     pub persistent: bool,
@@ -89,7 +91,13 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new(id: NodeId, link: Link, persistent: bool, rng: Rng, time: LocalTime) -> Self {
+    pub fn new(
+        id: NodeId,
+        link: LinkDirection,
+        persistent: bool,
+        rng: Rng,
+        time: LocalTime,
+    ) -> Self {
         Self {
             id,
             state: State::Connected {
@@ -134,7 +142,7 @@ impl Session {
         None
     }
 
-    pub fn connected(&mut self, _link: Link) {
+    pub fn connected(&mut self, _link: LinkDirection) {
         self.attempts = 0;
     }
 

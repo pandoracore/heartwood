@@ -18,11 +18,11 @@ use crate::node::NodeId;
 use crate::service::{routing, FetchLookup};
 use crate::storage::git::transport;
 use crate::test::logger;
-use crate::wire::Transport;
+use crate::wire::WireSession;
 use crate::{client, client::Runtime, service};
 
 type TestHandle = (
-    client::handle::Handle<Transport<routing::Table, address::Book, Storage, MemorySigner>>,
+    client::handle::Handle<WireSession<routing::Table, address::Book, Storage, MemorySigner>>,
     thread::JoinHandle<Result<(), client::Error>>,
 );
 

@@ -1,3 +1,5 @@
+use cyphernet::{EcSign, EcSk, EcSkInvalid};
+use std::ops::Deref;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
@@ -144,11 +146,34 @@ impl Signer for MemorySigner {
     }
 
     fn sign(&self, msg: &[u8]) -> Signature {
-        Signature(self.secret.sign(msg, None))
+        Signature(self.secret.deref().deref().sign(msg, None))
     }
 
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, SignerError> {
-        Ok(self.sign(msg))
+        Ok(Signer::sign(self, msg))
+    }
+}
+
+impl EcSk for MemorySigner {
+    type Pk = PublicKey;
+
+    fn generate_keypair() -> (Self, Self::Pk)
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+
+    fn to_pk(&self) -> Result<Self::Pk, EcSkInvalid> {
+        Ok(self.public_key().clone())
+    }
+}
+
+impl EcSign for MemorySigner {
+    type Sig = Signature;
+
+    fn sign(&self, msg: impl AsRef<[u8]>) -> Self::Sig {
+        Signer::sign(self, msg.as_ref())
     }
 }
 

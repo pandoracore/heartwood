@@ -41,7 +41,7 @@ branch = "noise-refactor"
 [patch.crates-io.io-reactor]
 git = "https://github.com/cyphernet-wg/rust-netservices"
 version = "0.1.0"
-branch = "master"
+branch = "refactoring-2"
 
 [patch.crates-io.netservices]
 git = "https://github.com/cyphernet-wg/rust-netservices"

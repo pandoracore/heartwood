@@ -1,9 +1,8 @@
-use netservices::Authenticator;
+use cyphernet::{Cert, EcSign};
 use std::io;
 use std::{net, thread, time};
 
-use netservices::resources::NetAccept;
-use netservices::socks5::Socks5;
+use netservices::resource::NetAccept;
 use reactor::poller::popol;
 use reactor::Reactor;
 use thiserror::Error;
@@ -12,12 +11,13 @@ use crate::address;
 use crate::control;
 use crate::node::NodeId;
 use crate::service::{routing, tracking};
-use crate::wire::Transport;
+use crate::wire::Wire;
 use crate::worker::{WorkerPool, WorkerReq};
 use crate::{crypto, profile, service, LocalTime};
 
 pub mod handle;
 use handle::Handle;
+use radicle::crypto::Signature;
 
 /// Directory in `$RAD_HOME` under which node-specific files are stored.
 pub const NODE_DIR: &str = "node";
@@ -52,16 +52,16 @@ pub enum Error {
 }
 
 /// Holds join handles to the client threads, as well as a client handle.
-pub struct Runtime<G: crypto::Signer + crypto::Negotiator> {
+pub struct Runtime<G: crypto::Signer + EcSign<Pk = NodeId, Sig = Signature> + Clone> {
     pub id: NodeId,
-    pub handle: Handle<Transport<routing::Table, address::Book, radicle::Storage, G>>,
+    pub handle: Handle<Wire<routing::Table, address::Book, radicle::Storage, G>>,
     pub control: thread::JoinHandle<Result<(), control::Error>>,
-    pub reactor: Reactor<Transport<service::routing::Table, address::Book, radicle::Storage, G>>,
+    pub reactor: Reactor<Wire<routing::Table, address::Book, radicle::Storage, G>>,
     pub pool: WorkerPool,
     pub local_addrs: Vec<net::SocketAddr>,
 }
 
-impl<G: crypto::Signer + crypto::Negotiator + Clone + 'static> Runtime<G> {
+impl<G: crypto::Signer + EcSign<Pk = NodeId, Sig = Signature> + Clone + 'static> Runtime<G> {
     /// Run the client.
     ///
     /// This function spawns threads.
@@ -104,11 +104,12 @@ impl<G: crypto::Signer + crypto::Negotiator + Clone + 'static> Runtime<G> {
             rng,
         );
 
-        let sig = signer.sign(id.as_slice());
-        let auth = Authenticator::new((*id).into(), sig.0.into());
+        let cert = Cert {
+            pk: id,
+            sig: EcSign::sign(&signer, id.as_slice()),
+        };
 
-        let proxy = Socks5::new(proxy_addr)?;
-        let (worker_send, worker_recv) = crossbeam_channel::unbounded::<WorkerReq>();
+        let (worker_send, worker_recv) = crossbeam_channel::unbounded::<WorkerReq<G>>();
         let pool = WorkerPool::with(
             10,
             time::Duration::from_secs(9),
@@ -116,7 +117,14 @@ impl<G: crypto::Signer + crypto::Negotiator + Clone + 'static> Runtime<G> {
             worker_recv,
             id.to_human(),
         );
-        let wire = Transport::new(service, worker_send, auth, signer.clone(), proxy, clock);
+        let wire = Wire::new(
+            service,
+            worker_send,
+            cert,
+            signer.clone(),
+            proxy_addr,
+            clock,
+        );
         let reactor = Reactor::named(wire, popol::Poller::new(), id.to_human())?;
         let handle = Handle::from(reactor.controller());
         let control = thread::spawn({
@@ -128,7 +136,7 @@ impl<G: crypto::Signer + crypto::Negotiator + Clone + 'static> Runtime<G> {
 
         for addr in listen {
             // TODO: Once the API supports it, we can pass an opaque type here.
-            let listener = NetAccept::bind(&addr, (signer.secret_key(), auth))?;
+            let listener = NetAccept::bind(&addr)?;
             let local_addr = listener.local_addr();
 
             local_addrs.push(local_addr);

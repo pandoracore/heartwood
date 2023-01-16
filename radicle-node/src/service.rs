@@ -18,7 +18,7 @@ use fastrand::Rng;
 use log::*;
 use nakamoto::{LocalDuration, LocalTime};
 use nakamoto_net as nakamoto;
-use nakamoto_net::Link;
+use netservices::LinkDirection;
 use nonempty::NonEmpty;
 use radicle::node::{Address, Features};
 use radicle::storage::{Namespaces, ReadStorage};
@@ -27,7 +27,7 @@ use crate::address;
 use crate::address::AddressBook;
 use crate::clock::Timestamp;
 use crate::crypto;
-use crate::crypto::{Negotiator, Signer, Verified};
+use crate::crypto::{Signer, Verified};
 use crate::git;
 use crate::identity::{Doc, Id};
 use crate::node;
@@ -248,7 +248,7 @@ where
     R: routing::Store,
     A: address::Store,
     S: WriteStorage + 'static,
-    G: Signer + Negotiator,
+    G: Signer,
 {
     pub fn new(
         config: Config,
@@ -524,12 +524,18 @@ where
         let persistent = self.config.is_persistent(&id);
         let peer = self.sessions.entry(id).or_insert_with(|| {
             // FIXME: This is wrong. We're not connected here!
-            Session::new(id, Link::Outbound, persistent, self.rng.clone(), self.clock)
+            Session::new(
+                id,
+                LinkDirection::Outbound,
+                persistent,
+                self.rng.clone(),
+                self.clock,
+            )
         });
         peer.attempted();
     }
 
-    pub fn connected(&mut self, remote: NodeId, link: Link) {
+    pub fn connected(&mut self, remote: NodeId, link: LinkDirection) {
         debug!("Connected to {} ({:?})", remote, link);
 
         // For outbound connections, we are the first to say "Hello".
@@ -556,7 +562,7 @@ where
                 remote,
                 Session::new(
                     remote,
-                    Link::Inbound,
+                    LinkDirection::Inbound,
                     self.config.is_persistent(&remote),
                     self.rng.clone(),
                     self.clock,

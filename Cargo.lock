@@ -655,7 +655,7 @@ dependencies = [
 [[package]]
 name = "cypheraddr"
 version = "0.1.0"
-source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#0f59c6def7c2703cdeccc0eb8b0e07c32eb67b68"
+source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#7ff92b1540d25658d4810d9ca274507685af0ba6"
 dependencies = [
  "amplify",
  "base32",
@@ -667,7 +667,7 @@ dependencies = [
 [[package]]
 name = "cyphergraphy"
 version = "0.1.0"
-source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#0f59c6def7c2703cdeccc0eb8b0e07c32eb67b68"
+source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#7ff92b1540d25658d4810d9ca274507685af0ba6"
 dependencies = [
  "amplify",
  "ed25519-compact",
@@ -678,7 +678,7 @@ dependencies = [
 [[package]]
 name = "cyphernet"
 version = "0.1.0"
-source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#0f59c6def7c2703cdeccc0eb8b0e07c32eb67b68"
+source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#7ff92b1540d25658d4810d9ca274507685af0ba6"
 dependencies = [
  "cypheraddr",
  "cyphergraphy",
@@ -822,7 +822,7 @@ dependencies = [
 [[package]]
 name = "eidolon"
 version = "0.1.0"
-source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#0f59c6def7c2703cdeccc0eb8b0e07c32eb67b68"
+source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#7ff92b1540d25658d4810d9ca274507685af0ba6"
 dependencies = [
  "amplify",
  "cyphergraphy",
@@ -1445,20 +1445,7 @@ dependencies = [
 [[package]]
 name = "io-reactor"
 version = "0.1.0"
-source = "git+https://github.com/cyphernet-wg/rust-netservices?branch=master#de251e2b3966785024149762e9963a7cbad216a6"
-dependencies = [
- "amplify",
- "crossbeam-channel",
- "libc",
- "log",
- "popol",
- "socket2",
-]
-
-[[package]]
-name = "io-reactor"
-version = "0.1.0"
-source = "git+https://github.com/cyphernet-wg/rust-netservices?branch=refactoring-2#22a7b14970061e7ec12bc2f2d5c76474430fa683"
+source = "git+https://github.com/cyphernet-wg/rust-netservices?branch=refactoring-2#05aafe89dbef90a929bbea444c943a9bf4183300"
 dependencies = [
  "amplify",
  "crossbeam-channel",
@@ -1708,14 +1695,14 @@ dependencies = [
 [[package]]
 name = "netservices"
 version = "0.1.0"
-source = "git+https://github.com/cyphernet-wg/rust-netservices?branch=refactoring-2#22a7b14970061e7ec12bc2f2d5c76474430fa683"
+source = "git+https://github.com/cyphernet-wg/rust-netservices?branch=refactoring-2#05aafe89dbef90a929bbea444c943a9bf4183300"
 dependencies = [
  "amplify",
  "chacha20 0.9.0",
  "chacha20poly1305 0.9.1",
  "cyphernet",
  "ed25519-compact",
- "io-reactor 0.1.0 (git+https://github.com/cyphernet-wg/rust-netservices?branch=refactoring-2)",
+ "io-reactor",
  "libc",
  "log",
  "rand 0.8.5",
@@ -1725,7 +1712,7 @@ dependencies = [
 [[package]]
 name = "noise-framework"
 version = "0.1.0"
-source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#0f59c6def7c2703cdeccc0eb8b0e07c32eb67b68"
+source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#7ff92b1540d25658d4810d9ca274507685af0ba6"
 dependencies = [
  "amplify",
  "chacha20poly1305 0.10.1",
@@ -2350,7 +2337,7 @@ dependencies = [
  "cyphernet",
  "fastrand",
  "git-ref-format",
- "io-reactor 0.1.0 (git+https://github.com/cyphernet-wg/rust-netservices?branch=master)",
+ "io-reactor",
  "lexopt",
  "log",
  "nakamoto-net",
@@ -2893,7 +2880,7 @@ dependencies = [
 [[package]]
 name = "socks5-client"
 version = "0.1.0"
-source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#0f59c6def7c2703cdeccc0eb8b0e07c32eb67b68"
+source = "git+https://github.com/cyphernet-wg/rust-cyphernet?branch=noise-refactor#7ff92b1540d25658d4810d9ca274507685af0ba6"
 dependencies = [
  "amplify",
  "cypheraddr",
